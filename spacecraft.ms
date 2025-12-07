@@ -6,6 +6,14 @@ ensureImport "worldRenderer"
 
 mu_planet = orbit.mu_planet
 
+engineSound = function
+	snd = new Sound
+	snd.init 1, 1, 1, Sound.noiseWave
+	snd.loop = true
+	outer.engineSound = snd
+	return snd
+end function
+
 globals.Craft = {}
 Craft.mass = 1000		// craft mass, in kg
 Craft.pos = null		// [x,y] position in meters relative to planet
@@ -14,6 +22,7 @@ Craft.angle = 0			// rotation angle in radians
 Craft.angVec = 0		// angular velocity, in radians/sec
 Craft.thrustF = 0		// current thrust force (N), in direction we're facing
 Craft.orbit = null
+Craft.engineSound = engineSound
 
 Craft.updateOrbit = function
 	if self.orbit == null then self.orbit = new Orbit2D
@@ -41,13 +50,30 @@ Craft.update = function(dt)
 	self.angle += self.angVec * dt
 	
 	// and if we're under thrust, update the orbit; otherwise,
-	// lock to the orbit radius (TODO)
+	// lock to the orbit radius
 	if self.thrustF then
 		self.updateOrbit
+		if not self.engineSound.isPlaying then self.engineSound.play
+	else
+		if self.engineSound.isPlaying then self.engineSound.stop
+		orbitR = self.orbit.radiusAtGlobalAngle(atan(self.pos[1], self.pos[0]))
+		currentR = sqrt(self.pos[0]^2 + self.pos[1]^2)
+		factor = orbitR / currentR
+		self.pos[0] *= factor; self.pos[1] *= factor
 	end if
 end function
 
+drawInfo = function(craft)
+	text.clear
+	alt = sqrt(craft.pos.x^2 + craft.pos.y^2) - 6000*km // (radius of planet)
+	altStr = "000000" + str(round(alt/1000, 3)) + "000"
+	dotPos = altStr.indexOf(".")
+	altStr = altStr[dotPos-6:dotPos+4]
+	text.row = 25; text.column = 25; print "ALT: " + altStr + "km"
+	text.row = 0; text.column = 55; print "SPEED: " + timeScale + "X", ""
+end function
 
+timeScale = 8
 
 demo = function
 	clear
@@ -64,18 +90,28 @@ demo = function
 
 
 	worldRenderer.setup
-	worldRenderer.refScreenPos = [480,500]
+	worldRenderer.refScreenPos = [480,320]
 	worldRenderer.zoomToScaleIdx 11
 
-	timeScale = 10
 	while true
-		key.clear
 		yield
 		// check inputs
 		if key.pressed("left shift") then
 			ship.thrustF = 5000  // Apollo service module ~= 91 kN
 		else
 			ship.thrustF = 0
+		end if
+		if key.available then
+			k = key.get
+			if k == "." and timeScale < 256 then
+				globals.timeScale *= 2
+			else if k == "," and timeScale > 1 then
+				globals.timeScale /= 2
+			else if k == "+" or k == "=" then
+				worldRenderer.zoomIn
+			else if k == "-" or k == "_" then
+				worldRenderer.zoomOut
+			end if
 		end if
 		// Rotation is tricky -- if we simulate this realistically, while the
 		// time scale is 10X or more, it's completely uncontrollable!  So for
@@ -97,7 +133,7 @@ demo = function
 		worldRenderer.update
 		worldRenderer.drawOrbit ship.orbit
 		
-		text.clear; text.row = 24; pprint ship
+		drawInfo ship
 	end while
 	key.clear
 end function
