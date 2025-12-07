@@ -23,9 +23,15 @@ end function
 list.minus = function(other)
 	return [self[0] - other[0], self[1] - other[1]]
 end function
+list.normalize = function
+	m = sqrt(self[0]^2 +self[1]^2)
+	if m < 1E-9 then return
+	self[0] /= m
+	self[1] /= m
+end function
 
 // Orbit2D class: represents an orbit around a planet[oid].
-Orbit2D = {}
+globals.Orbit2D = {}
 Orbit2D.mu = 0		// G (6.67430E-11) * planet mass in kg
 Orbit2D.p = 0		// semi-latus rectum
 Orbit2D.e = 0		// eccentricity
@@ -87,7 +93,7 @@ test = function
 	orbit = new Orbit2D
 	orbit.compute pos, velocity, mu_planet
 	
-	worldRenderer.rocketSprite.rotation = 90
+	worldRenderer.rocketSprite.rotation = 180
 	worldRenderer.rocketPos = pos
 	worldRenderer.refScreenPos = [480,500]
 	worldRenderer.setup
