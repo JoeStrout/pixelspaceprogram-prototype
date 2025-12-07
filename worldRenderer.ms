@@ -14,12 +14,14 @@ scales = [25*cm, m, 3*m, 10*m, 30*m, 100*m, 300*m, km,
 scaleIdx = 0
 pixelScale = scales[scaleIdx]  // m per pixel
 
+rocketImage = file.loadImage("rocket512.png")
+rocketIcon = file.loadImage("rocketIcon.png")
+
 rocketSprite = new Sprite
-rocketSprite.image = file.loadImage("rocket512.png")
+rocketSprite.image = rocketImage
 // Note: rocket is ~500 pixels tall, and is assumed to
 // be 50 meters tall.  So its native scale is:
 rocketSprite.imageScale = 0.1 // m/pixel
-display(4).sprites.push rocketSprite
 
 // examples:
 // scale=1 --> 500 pixels tall --> 0.1 m/pixel
@@ -32,6 +34,14 @@ drawCircle = function(screenCenter, screenRadius, color)
 	bottom = screenCenter[1] - screenRadius
 	diam = screenRadius * 2
 	gfx.fillEllipse left, bottom, diam, diam, color	  
+end function
+
+// worldToScreen: given an [x,y] position in absolute (meter) coordinates,
+// return the corresponding screen (pixel) coordinates.
+worldToScreen = function(pos)
+	return [
+		(pos[0] - rocketPos[0]) / pixelScale + refScreenPos[0],
+		(pos[1] - rocketPos[1]) / pixelScale + refScreenPos[1] ]
 end function
 
 // drawWorld: draw the world, relative to a reference
@@ -60,11 +70,19 @@ drawWorld = function(refScreenPos, refWorldPos)
 end function
 
 // drawRocket: draw our rocket, at the given screen position
-// and current scale.
+// and current scale.  If we're zoomed too far out, switch
+// to a constant-size icon.
 drawRocket = function(refScreenPos)
 	rocketSprite.x = refScreenPos[0]
 	rocketSprite.y = refScreenPos[1]
-	rocketSprite.scale = rocketSprite.imageScale / pixelScale
+	imgScale = rocketSprite.imageScale / pixelScale
+	if imgScale * rocketImage.height > rocketIcon.height then
+		rocketSprite.scale = imgScale
+		rocketSprite.image = rocketImage
+	else
+		rocketSprite.scale = 1
+		rocketSprite.image = rocketIcon
+	end if
 end function
 
 drawScaleBar = function
@@ -80,22 +98,39 @@ drawScaleBar = function
 	gfx.print s, 10, 615, color.white, "small"
 end function
 
-zoomOut = function
-	if scaleIdx < scales.len-1 then
-		outer.scaleIdx += 1
-		outer.pixelScale = scales[scaleIdx]
-	end if
+_fullOrbitAnglePoints = range(0, 2*pi, 2*pi/64)
+drawOrbit = function(orbit, color="#88FFFF")
+	lastPoint = null
+	for theta in _fullOrbitAnglePoints
+		// get the point, in absolute (meter) units
+		point = orbit.pointAtGlobalAngle(theta)
+		// convert to display units
+		point = worldToScreen(point)
+		// then draw!
+		if lastPoint != null then gfx.line lastPoint.x, lastPoint.y, point.x, point.y, color
+		lastPoint = point		
+	end for
+
 end function
 
-zoomIn = function
-	if scaleIdx > 0 then
-		outer.scaleIdx -= 1
-		outer.pixelScale = scales[scaleIdx]
-	end if
+zoomToScaleIdx = function(scaleIdx)
+	if scaleIdx < 0 then scaleIdx = 0
+	if scaleIdx >= scales.len then scaleIdx = scales.len - 1
+	outer.scaleIdx = scaleIdx
+	outer.pixelScale = scales[scaleIdx]
+end function	
+
+zoomOut = function; zoomToScaleIdx scaleIdx + 1; end function
+zoomIn  = function; zoomToScaleIdx scaleIdx - 1; end function
+
+rocketPos = [0, worldRadius+25]  // position of the rocket in the world, in meters
+refScreenPos = [480, 200]  // position of the rocket on screen, in pixels
+
+setup = function
+	clear
+	display(4).sprites.push rocketSprite
 end function
 
-
-refScreenPos = [480, 200]
 update = function
 	drawWorld refScreenPos, [-rocketPos[0], -rocketPos[1]]
 	drawRocket refScreenPos
@@ -103,13 +138,9 @@ update = function
 end function
 
 if locals == globals then
-	clear
-	display(4).sprites.push rocketSprite
+	setup
 	while true
-		// rocket sits 25 m above the ground, so:
-		drawWorld [480,200], [0, -worldRadius -25]
-		drawRocket [480,200]
-		drawScaleBar
+		update
 		k = key.get.code
 		if k == 17 or k == 20 then
 			zoomOut
